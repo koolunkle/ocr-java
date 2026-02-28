@@ -28,7 +28,11 @@ dependencies {
 
     // RapidOCR
     implementation 'io.github.mymonstercat:rapidocr:0.0.7'
-    implementation 'io.github.mymonstercat:rapidocr-onnx-platform:0.0.7'
+    implementation('io.github.mymonstercat:rapidocr-onnx-platform:0.0.7') {
+        exclude group: 'io.github.mymonstercat', module: 'rapidocr-onnx-windows-x86'
+        exclude group: 'io.github.mymonstercat', module: 'rapidocr-onnx-macosx-x86_64'
+        exclude group: 'io.github.mymonstercat', module: 'rapidocr-onnx-macosx-arm64'
+    }
 
     // ONNX Runtime (for Layout/Table models)
     implementation 'com.microsoft.onnxruntime:onnxruntime:1.16.3'
