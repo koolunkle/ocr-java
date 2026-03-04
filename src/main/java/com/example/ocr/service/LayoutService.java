@@ -333,9 +333,11 @@ public class LayoutService {
             }
         }
 
-        // 상위 1000개 후보군 유지 후 NMS 적용
+        // 상위 N개 후보군 유지 후 NMS 적용 (N은 설정값 ocr.models.layout-nms-top-k)
         allCandidates.sort(Comparator.comparingDouble(LayoutRegion::score).reversed());
-        List<LayoutRegion> topCandidates = allCandidates.stream().limit(1000).toList();
+        List<LayoutRegion> topCandidates = allCandidates.stream()
+                .limit(this.appProperties.models().layoutNmsTopK())
+                .toList();
 
         return applyNonMaximumSuppression(topCandidates, this.appProperties.models().layoutNmsThreshold());
     }

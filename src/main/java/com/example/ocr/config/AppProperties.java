@@ -114,6 +114,22 @@ public record AppProperties(
             @DefaultValue("12") @Min(0) 
             int lineSortingYTolerance,
 
+            /** 레이아웃 영역 보정 시 OCR 블록과의 최소 겹침 비율 (IoU) */
+            @DefaultValue("0.3") @Min(0) @Max(1)
+            float layoutIouThreshold,
+
+            /** 레이아웃 보정 시 유효한 텍스트로 인정할 최소 글자 수 */
+            @DefaultValue("2") @Min(1)
+            int minTextLength,
+
+            /** 표(Table) 영역 보정 시 추가할 상하좌우 여백 (픽셀) */
+            @DefaultValue("10") @Min(0)
+            int tablePadding,
+
+            /** 일반 텍스트 영역 보정 시 추가할 상하좌우 여백 (픽셀) */
+            @DefaultValue("5") @Min(0)
+            int textPadding,
+
             /** 디버그 디렉토리 정리(Cleanup)를 수행할 최소 주기 (밀리초) */
             @DefaultValue("3000") @Positive 
             int debugDirectoryCleanupIntervalMs,
@@ -151,7 +167,11 @@ public record AppProperties(
             
             /** 중복된 레이아웃 박스를 제거하기 위한 NMS(Non-Maximum Suppression) 임계값 */
             @DefaultValue("0.45") @Min(0) @Max(1) 
-            float layoutNmsThreshold
+            float layoutNmsThreshold,
+
+            /** NMS 처리 전 유지할 최대 후보 영역 개수 */
+            @DefaultValue("1000") @Positive
+            int layoutNmsTopK
             
     ) {}
 

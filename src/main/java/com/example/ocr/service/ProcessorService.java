@@ -213,16 +213,17 @@ public class ProcessorService {
         }
 
         List<LayoutService.LayoutRegion> refinedRegions = new ArrayList<>();
-        float layoutIouThreshold = 0.3f; 
+        float layoutIouThreshold = this.appProperties.algorithm().layoutIouThreshold();
+        int minTextLength = this.appProperties.algorithm().minTextLength();
 
         for (LayoutService.LayoutRegion region : regions) {
             // 레이아웃 영역 내에 포함된 OCR 텍스트 블록 필터링
-            // 유의미한 텍스트(2글자 이상)만 후보로 인정하여 미세 노이즈 차단
+            // 유의미한 텍스트(최소 글자 수 이상)만 후보로 인정하여 미세 노이즈 차단
             List<Rectangle> containedRects = textBlocks.stream()
                     .filter(block -> {
                         String text = Objects.requireNonNullElse(block.getText(), "").trim();
 
-                        if (text.length() < 2) {
+                        if (text.length() < minTextLength) {
                             return false;
                         }
 
@@ -251,12 +252,12 @@ public class ProcessorService {
             Rectangle finalRect;
 
             if (LayoutType.fromCode(region.type()).isTable()) {
-                // 표(Table)는 테두리선 보존을 위해 원본 탐지 박스와 OCR 박스의 합집합 사용 + 패딩 10px
+                // 표(Table)는 테두리선 보존을 위해 원본 탐지 박스와 OCR 박스의 합집합 사용 + 설정된 표 패딩 적용
                 finalRect = region.rect().union(ocrUnion);
-                finalRect = applyPadding(finalRect, 10, imgWidth, imgHeight);
+                finalRect = applyPadding(finalRect, this.appProperties.algorithm().tablePadding(), imgWidth, imgHeight);
             } else {
-                // 일반 텍스트 영역은 실제 OCR 글자가 있는 위치로 축축/최적화 + 패딩 5px
-                finalRect = applyPadding(ocrUnion, 5, imgWidth, imgHeight);
+                // 일반 텍스트 영역은 실제 OCR 글자가 있는 위치로 최적화 + 설정된 텍스트 패딩 적용
+                finalRect = applyPadding(ocrUnion, this.appProperties.algorithm().textPadding(), imgWidth, imgHeight);
             }
 
             refinedRegions.add(new LayoutService.LayoutRegion(region.type(), finalRect, region.score()));
