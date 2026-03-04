@@ -109,7 +109,7 @@ public class VisualService {
             
             this.lastCleanupTimeMap.put(sanitizedDocumentName, currentTime);
         } catch (Exception e) {
-            log.warn("[VisualService] Failed to cleanup debug directory for: {}", documentName, e);
+            log.warn("Failed to cleanup debug directory for: {}", documentName, e);
         }
     }
 
@@ -234,7 +234,7 @@ public class VisualService {
             Files.createDirectories(savePath.getParent());
             Imgcodecs.imwrite(savePath.toString(), canvas);
         } catch (IOException e) {
-            log.error("[VisualService] Failed to save debug image: {}", fileName, e);
+            log.error("Failed to save debug image: {}", fileName, e);
         }
     }
 

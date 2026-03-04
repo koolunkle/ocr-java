@@ -141,7 +141,7 @@ public class DocumentController {
                 sseSession.close();
                 
             } catch (Exception e) {
-                log.error("[DocumentController] Streaming analysis failed for document: {}", documentName, e);
+                log.error("Streaming analysis failed for document: {}", documentName, e);
                 sseSession.closeWithError(e);
                 
             } finally {

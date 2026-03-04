@@ -73,14 +73,14 @@ public class ModelService {
                         copyResourceToFile(classpathResourcePath, targetFilePath);
 
                     } catch (IOException e) {
-                        log.error("[ModelService] Failed to extract model file: {}", fileName, e);
+                        log.error("Failed to extract model file: {}", fileName, e);
                     }
                 });
     }
 
     /**
-     * 파일 추출(복사)을 건너뛸지 여부를 결정합니다. TXT 파일은 설정 변경 가능성 등을 고려해 매번 덮어쓰도록 유도하고, 그 외 파일(주로 무거운 모델 바이너리)은 이미
-     * 존재하면 건너뜁니다.
+     * 파일 추출(복사)을 건너뛸지 여부를 결정합니다. 
+     * TXT 파일은 설정 변경 가능성 등을 고려해 매번 덮어쓰도록 유도하고, 그 외 파일(주로 무거운 모델 바이너리)은 이미 존재하면 건너뜁니다.
      */
     private boolean shouldSkipExtraction(Path targetFilePath, String fileName) {
         boolean fileExists = Files.exists(targetFilePath);
@@ -103,8 +103,7 @@ public class ModelService {
             }
 
             Files.copy(resourceStream, targetFilePath, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("[ModelService] Successfully extracted resource: {}",
-                    targetFilePath.getFileName());
+            log.debug("Extracted resource: {}", targetFilePath.getFileName());
         }
     }
 }

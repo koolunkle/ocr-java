@@ -51,18 +51,17 @@ public class AppInitializer {
     @EventListener(ApplicationReadyEvent.class)
     public void initializeApplication() {
         try {
-            log.info("[AppInitializer] Initializing core AI components...");
-            
+            log.info("Initializing core AI components...");
+
             // 1. ONNX 모델 파일들을 임시 디렉토리로 추출하고 루트 경로 반환
             Path modelRootDirectory = this.modelService.prepare(Model.ONNX_PPOCR_V4);
             
             // 2. 추출된 경로를 바탕으로 레이아웃 탐지 서비스 초기화
             initializeLayoutService(modelRootDirectory);
-            
-            log.info("[AppInitializer] Core components initialization complete");
-            
+
+            log.info("Core components initialization complete");
         } catch (Exception e) {
-            log.error("[AppInitializer] Failed to initialize application core components", e);
+            log.error("Failed to initialize core AI components", e);
         }
     }
 
@@ -80,16 +79,15 @@ public class AppInitializer {
 
             // 파일이 하나라도 존재하지 않으면 초기화를 건너뛰도록 Early Return 적용
             if (!Files.exists(layoutModelPath) || !Files.exists(layoutDictionaryPath)) {
-                log.warn("[AppInitializer] Layout service initialization SKIPPED: Missing required model or dictionary files");
+                log.warn("Layout service initialization skipped: missing required files");
                 return;
             }
 
             // 파일이 정상적으로 존재하면 초기화 수행
             this.layoutService.init(layoutModelPath.toString(), Files.readAllLines(layoutDictionaryPath));
-            log.info("[AppInitializer] Layout service initialized and READY");
-            
+            log.info("Layout service initialized successfully");
         } catch (Exception e) {
-            log.error("[AppInitializer] Failed to initialize Layout service: {}", e.getMessage(), e);
+            log.error("Failed to initialize layout service: {}", e.getMessage(), e);
         }
     }
 }

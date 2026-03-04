@@ -95,7 +95,7 @@ public class LayoutService {
                 .map(String::trim)
                 .toList();
                 
-        log.info("[LayoutService] Layout Model READY (Loaded Labels: {})", this.classLabels.size());
+        log.info("Layout model loaded (Labels: {})", this.classLabels.size());
     }
 
     @PreDestroy
@@ -104,7 +104,7 @@ public class LayoutService {
             try {
                 this.onnxSession.close();
             } catch (Exception e) {
-                log.warn("[LayoutService] Failed to close layout session", e);
+                log.warn("Failed to close layout session", e);
             }
         }
     }
@@ -145,7 +145,7 @@ public class LayoutService {
             );
 
         } catch (Exception e) {
-            log.error("[LayoutService] Layout detection failed", e);
+            log.error("Layout detection failed", e);
             return Collections.emptyList();
         } 
     }
@@ -223,7 +223,7 @@ public class LayoutService {
             for (Map.Entry<String, OnnxValue> entry : inferenceResult) {
                 OnnxTensor outputTensor = (OnnxTensor) entry.getValue();
                 long[] shape = outputTensor.getInfo().getShape();
-                log.debug("[LayoutService] Output Node: {}, Shape: {}", entry.getKey(), Arrays.asList(shape));
+                log.debug("Output node: {}, Shape: {}", entry.getKey(), Arrays.toString(shape));
 
                 // 1. NMS가 모델 내부에 포함된 경우
                 if ((shape.length == 3 && shape[2] == 6) || (shape.length == 2 && shape[1] == 6)) {

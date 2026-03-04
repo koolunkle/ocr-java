@@ -50,10 +50,10 @@ public class InferenceConfig {
     public void initializeOpenCvNativeLibrary() {
         try {
             OpenCV.loadLocally();
-            log.info("[InferenceConfig] Native OpenCV library loaded successfully");
+            log.info("Native OpenCV library loaded successfully");
         } catch (Throwable e) {
             // Error, Exception 등 모든 예외 상황 로깅
-            log.error("[InferenceConfig] Failed to load native OpenCV library", e);
+            log.error("Failed to load native OpenCV library", e);
         }
     }
 
@@ -74,11 +74,11 @@ public class InferenceConfig {
      */
     @Bean
     InferenceEngine ocrInferenceEngine() {
-        log.info("[InferenceConfig] Preparing models and Initializing V4 ONNX OCR Engine");
+        log.info("Preparing models and initializing V4 ONNX OCR engine");
         try {
             modelService.prepare(Model.ONNX_PPOCR_V4);
         } catch (IOException e) {
-            log.error("[InferenceConfig] Failed to prepare ONNX model", e);
+            log.error("Failed to prepare ONNX model", e);
             throw new RuntimeException("Failed to initialize OCR engine", e);
         }
         return InferenceEngine.getInstance(Model.ONNX_PPOCR_V4, HardwareConfig.getOnnxConfig());

@@ -89,9 +89,9 @@ public class SseSessionWrapper {
         } catch (IOException e) {
             // 클라이언트가 브라우저를 닫는 등의 이유로 연결이 끊어진 경우
             if (isClientDisconnected(e)) {
-                log.debug("[SseUtil] Client normally disconnected. Session ID: {}", this.sessionId);
+                log.debug("Client normally disconnected. Session ID: {}", this.sessionId);
             } else {
-                log.error("[SseUtil] Failed to send event to Session ID: {}", this.sessionId, e);
+                log.error("Failed to send event to Session ID: {}", this.sessionId, e);
             }
             // 연결에 문제가 생겼으므로 즉시 자원 해제
             close();

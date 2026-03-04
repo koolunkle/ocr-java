@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ErrorResponse> handleApplicationException(AppException exception, HttpServletRequest request) {
-        log.warn("[GlobalExceptionHandler] Business Exception - Status: {}, Message: {}", exception.getHttpStatus(), exception.getMessage());
+        log.warn("Business Exception - Status: {}, Message: {}", exception.getHttpStatus(), exception.getMessage());
         return buildErrorResponse(exception.getHttpStatus(), exception.getMessage(), request);
     }
 
@@ -61,7 +61,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException exception, HttpServletRequest request) {
-        log.warn("[GlobalExceptionHandler] Upload size exceeded: {}", exception.getMessage());
+        log.warn("Upload size exceeded: {}", exception.getMessage());
         return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "Uploaded file exceeds the maximum allowed size", request);
     }
 
@@ -74,7 +74,7 @@ public class GlobalExceptionHandler {
         MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<ErrorResponse> handleBadRequestExceptions(Exception exception, HttpServletRequest request) {
-        log.warn("[GlobalExceptionHandler] Bad Request - URI: {}, Message: {}", request.getRequestURI(), exception.getMessage());
+        log.warn("Bad Request - URI: {}, Message: {}", request.getRequestURI(), exception.getMessage());
         return buildErrorResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
@@ -85,11 +85,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IOException.class)
     public ResponseEntity<ErrorResponse> handleIOException(IOException exception, HttpServletRequest request) {
         if (isClientDisconnected(exception)) {
-            log.debug("[GlobalExceptionHandler] Client disconnected during I/O operation (URI: {})", request.getRequestURI());
+            log.debug("Client disconnected during I/O operation (URI: {})", request.getRequestURI());
             return null; // 이미 연결 소켓이 닫혔으므로 응답 본문을 보내지 않음
         }
         
-        log.error("[GlobalExceptionHandler] I/O Operation failed: {}", exception.getMessage(), exception);
+        log.error("I/O Operation failed: {}", exception.getMessage(), exception);
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Server I/O processing failed", request);
     }
 
@@ -98,7 +98,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception exception, HttpServletRequest request) {
-        log.error("[GlobalExceptionHandler] Unexpected Internal Server Error (URI: {})", request.getRequestURI(), exception);
+        log.error("Unexpected Internal Server Error (URI: {})", request.getRequestURI(), exception);
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected internal server error occurred", request);
     }
 

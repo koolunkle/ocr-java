@@ -92,7 +92,7 @@ public class ResultLogger {
                     SEPARATOR_BAR
             );
         } catch (JsonProcessingException e) {
-            log.error("[LogUtil] Failed to serialize page result (Page: {})", pageResult.pageNum(), e);
+            log.error("Failed to serialize page result (Page: {})", pageResult.pageNum(), e);
         }
     }
 
