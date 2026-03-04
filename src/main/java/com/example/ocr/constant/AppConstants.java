@@ -87,6 +87,21 @@ public final class AppConstants {
         
         /** OpenCV Bounding Box 좌표 차원 (X, Y 2차원) */
         public static final int COORD_DIM = 2;
+
+        /** 수직 인접성 판단을 위한 줄 높이 배수 */
+        public static final double ADJACENCY_MULTIPLIER = 1.5;
+        
+        /** 수직 박스 병합 시 허용하는 최소 겹침/간격 픽셀 (음수는 겹침 허용) */
+        public static final int VERTICAL_GAP_TOLERANCE = -10;
+        
+        /** IQR 기반 이상치 탐지를 수행하기 위한 최소 샘플 수 */
+        public static final int MIN_OUTLIER_SAMPLE = 3;
+        
+        /** IQR(사분위범위)의 가중치 계수 (표준 1.5) */
+        public static final double IQR_FACTOR = 1.5;
+
+        /** OCR 결과가 없을 때의 기본 메시지 */
+        public static final String EMPTY_OCR_MSG = "Empty OCR";
     }
 
     // ========================================================================

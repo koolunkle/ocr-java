@@ -63,7 +63,8 @@ ocr:
     decision-header-search-offset: 4
     line-sorting-y-tolerance: 12
     layout-iou-threshold: 0.3
-    min-text-length: 2
+    min-text-length: 1
+    min-char-score: 0.6
     table-padding: 10
     text-padding: 5
     debug-directory-cleanup-interval-ms: 3000

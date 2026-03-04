@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.IntSummaryStatistics;
 import java.util.List;
 import java.util.Objects;
@@ -15,6 +16,8 @@ import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
+
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
@@ -66,6 +69,13 @@ public class ProcessorService {
     private final LayoutService layoutService;
     
     private final Semaphore concurrencyLimitSemaphore;
+
+    // ========================================================================
+    // 내부 데이터 구조
+    // ========================================================================
+
+    /** 수평 정렬 이상치 탐지를 위한 통계 분포 정보 (Left/Right Bound) */
+    private record HorizontalDistribution(double lowerL, double upperL, double lowerR, double upperR) {}
 
     // ========================================================================
     // 정적 초기화 
@@ -183,17 +193,20 @@ public class ProcessorService {
         }
         
         try {
-            // 1. 전체 페이지 OCR 실행
+            // 전체 페이지 OCR 실행
             OcrResult ocrResult = this.inferenceEngine.runOcr(imagePath, this.paramConfig);
 
-            // 2. 레이아웃 영역 탐지 실행
+            // 레이아웃 영역 탐지 실행
             List<LayoutService.LayoutRegion> layoutRegions = this.layoutService.detectRegions(imageMat, this.appProperties.engine().layoutScoreThreshold());
+            
+            // 인접한 동일 타입 영역(예: 법원명 + 결정) 병합
+            List<LayoutService.LayoutRegion> mergedRegions = mergeNearbyRegions(layoutRegions);
 
-            // 3. 레이아웃 영역을 OCR 텍스트 라인에 맞춰 정밀 보정 
-            List<LayoutService.LayoutRegion> adjustedRegions = adjustLayoutRegions(layoutRegions, ocrResult.getTextBlocks(), imageMat.width(), imageMat.height());
+            // 레이아웃 영역을 OCR 텍스트 라인에 맞춰 정밀 보정 
+            List<LayoutService.LayoutRegion> adjustedRegions = adjustLayoutRegions(mergedRegions, ocrResult.getTextBlocks(), imageMat.width(), imageMat.height());
             this.visualService.saveLayoutDebug(imageMat, pageNumber, documentName, adjustedRegions);
 
-            // 4. 분석 결과 통합 및 가공
+            // 분석 결과 통합 및 가공
             AnalysisResponse.PageResult finalResult = buildPageResult(pageNumber, ocrResult, imageMat, documentName, adjustedRegions);
 
             this.resultLogger.logPageResult(finalResult);
@@ -214,19 +227,13 @@ public class ProcessorService {
 
         List<LayoutService.LayoutRegion> refinedRegions = new ArrayList<>();
         float layoutIouThreshold = this.appProperties.algorithm().layoutIouThreshold();
-        int minTextLength = this.appProperties.algorithm().minTextLength();
-
+        
         for (LayoutService.LayoutRegion region : regions) {
             // 레이아웃 영역 내에 포함된 OCR 텍스트 블록 필터링
-            // 유의미한 텍스트(최소 글자 수 이상)만 후보로 인정하여 미세 노이즈 차단
+            // 유의미한 텍스트(최소 글자 수 및 신뢰도 이상)만 후보로 인정하여 노이즈 차단
             List<Rectangle> containedRects = textBlocks.stream()
+                    .filter(this::isValidTextBlock)
                     .filter(block -> {
-                        String text = Objects.requireNonNullElse(block.getText(), "").trim();
-
-                        if (text.length() < minTextLength) {
-                            return false;
-                        }
-
                         Rectangle o = convertToAwtRectangle(block);
                         Rectangle intersection = region.rect().intersection(o);
 
@@ -247,8 +254,11 @@ public class ProcessorService {
                 continue;
             }
 
+            // 영역 내 텍스트 블록 중 메인 텍스트 뭉치에서 너무 멀리 떨어진 고립 박스(인장 등) 제외
+            List<Rectangle> mainTextRects = filterOutlierRects(containedRects);
+            
             // 영역 내 모든 텍스트 블록을 포함하는 최소 외접 사각형(Union) 계산
-            Rectangle ocrUnion = containedRects.stream().reduce(Rectangle::union).get();
+            Rectangle ocrUnion = mainTextRects.stream().reduce(Rectangle::union).orElse(containedRects.get(0));
             Rectangle finalRect;
 
             if (LayoutType.fromCode(region.type()).isTable()) {
@@ -283,25 +293,27 @@ public class ProcessorService {
      */
     private AnalysisResponse.PageResult buildPageResult(int pageNumber, OcrResult ocrResult, Mat imageMat, String documentName, List<LayoutService.LayoutRegion> layoutRegions) {
         if (ocrResult == null || ocrResult.getTextBlocks() == null) {
-            return new AnalysisResponse.PageResult(pageNumber, AnalysisResponse.Type.RAW, new PageData.Raw(List.of(), "Empty OCR"));
+            return new AnalysisResponse.PageResult(pageNumber, AnalysisResponse.Type.RAW, new PageData.Raw(List.of(), AppConstants.Policy.EMPTY_OCR_MSG));
         }
 
-        List<TextBlock> textBlocks = ocrResult.getTextBlocks();
+        List<TextBlock> validBlocks = ocrResult.getTextBlocks().stream()
+                .filter(this::isValidTextBlock)
+                .toList();
 
         try (MatResourceWrapper wrapper = new MatResourceWrapper()) {
-            List<Mat> boundingBoxMatrices = convertToMatList(textBlocks, wrapper);
+            List<Mat> boundingBoxMatrices = convertToMatList(validBlocks, wrapper);
 
-            // 1. 특정 양식(판결문 등) 파싱 시도
+            // 1. 특정 도메인 템플릿(법원 결정문 등) 파싱 시도
             return Optional.ofNullable(this.decisionParser.parse(
-                            textBlocks.stream().map(TextBlock::getText).toList(),
+                            validBlocks.stream().map(TextBlock::getText).toList(),
                             boundingBoxMatrices
                     ))
                     .map(decisionData -> {
                         this.visualService.saveDecisionDebug(imageMat, pageNumber, documentName, decisionData.boundingBoxes());
                         return new AnalysisResponse.PageResult(pageNumber, AnalysisResponse.Type.DECISION, new PageData.Decision(decisionData.data()));
                     })
-                    // 2. 특정 양식이 아니면 일반(Raw) 레이아웃 결과로 반환
-                    .orElseGet(() -> buildRawResult(pageNumber, textBlocks, layoutRegions));
+                    // 2. 특정 템플릿이 아니면 일반 분석(Raw) 결과로 반환
+                    .orElseGet(() -> buildRawResult(pageNumber, validBlocks, layoutRegions));
         }
     }
 
@@ -310,9 +322,10 @@ public class ProcessorService {
      */
     private AnalysisResponse.PageResult buildRawResult(int pageNumber, List<TextBlock> textBlocks, List<LayoutService.LayoutRegion> layoutRegions) {
         List<PageData.Region> parsedRegions = layoutRegions.stream().map(layoutRegion -> {
-            // 해당 영역 내에 중심점이 포함된 텍스트 블록 필터링
+            // 해당 영역 내에 중심점이 포함된 텍스트 블록 중 유효한 것만 필터링
             List<TextBlock> innerBlocks = textBlocks.stream()
                     .filter(block -> layoutRegion.rect().contains(calculateCenterPoint(block.getBoxPoint())))
+                    .filter(this::isValidTextBlock)
                     .toList();
 
             // 텍스트를 상단->하단, 좌측->우측 순서로 정렬 및 정제
@@ -420,6 +433,42 @@ public class ProcessorService {
         }).toList();
     }
 
+ 
+    /**
+     * OCR 텍스트 블록의 품질이 유효한지 검증 (노이즈 제거용)
+     */
+    private boolean isValidTextBlock(TextBlock block) {
+        if(block == null) {
+            return false;
+        }
+
+        String text = block.getText();
+        if(text == null || text.isBlank()) {
+            return false;
+        }
+
+        long validCharCount = text.chars().filter(ch -> !Character.isWhitespace(ch)).count();
+
+        // 설정된 최소 글자 수 미만은 노이즈로 간주 
+        if(validCharCount < this.appProperties.algorithm().minTextLength()) {
+            return false;
+        }
+
+        float[] scores = block.getCharScores();
+        
+        // 인식 품질(CharScore)이 기준치 미만이면 노이즈로 간주 
+        if(scores == null || scores.length == 0) {
+            return false;
+        }
+
+        double averageScore = IntStream.range(0, scores.length)
+                .mapToDouble(i -> scores[i])
+                .average()
+                .orElse(0.0);
+
+        return averageScore >= this.appProperties.algorithm().minCharScore();
+    }
+
     /**
      * 다각형 좌표 리스트의 기하학적 중심점 계산
      */
@@ -450,5 +499,129 @@ public class ProcessorService {
      */
     private PageData.Rect convertToDomainRect(Rectangle awtRectangle) {
         return new PageData.Rect(awtRectangle.x, awtRectangle.y, awtRectangle.width, awtRectangle.height);
+    }
+
+    /**
+     * 텍스트 블록 목록 중 수평 분포에서 벗어난 고립된 블록(인장 등)을 필터링
+     * 문장의 마지막 짧은 라인이 누락되지 않도록 수직 인접성 및 정렬 기준을 고려
+     */
+    private List<Rectangle> filterOutlierRects(List<Rectangle> rects) {
+        if (rects.size() < AppConstants.Policy.MIN_OUTLIER_SAMPLE) {
+            return rects;
+        }
+
+        // 수평 분포 정보(IQR 등)를 한 번만 계산하여 성능 최적화 (O(N))
+        HorizontalDistribution distribution = calculateHorizontalDistribution(rects);
+        
+        // 수직 위치(Y) 기준으로 정렬하여 문맥 파악
+        List<Rectangle> sortedByY = rects.stream()
+                .sorted(Comparator.comparingInt(r -> r.y))
+                .toList();
+
+        List<Rectangle> filtered = new ArrayList<>();
+        filtered.add(sortedByY.get(0));
+
+        for (int i = 1; i < sortedByY.size(); i++) {
+            Rectangle current = sortedByY.get(i);
+            Rectangle previous = sortedByY.get(i - 1);
+
+            // 1. 수직적으로 바로 윗줄과 가깝다면(문장/문단의 일부) 무조건 보호
+            if (isVerticallyAdjacent(previous, current)) {
+                filtered.add(current);
+                continue;
+            }
+
+            // 2. 수직으로 떨어져 있다면 수평 정렬 상태를 체크하여 고립된 노이즈인지 판별
+            if (isAlignedWithMainText(current, distribution)) {
+                filtered.add(current);
+            }
+        }
+
+        return filtered;
+    }
+
+    /** 
+     * 텍스트 블록들의 수평 분포(IQR)를 분석하여 이상치 탐지를 위한 기준점 계산
+     */
+    private HorizontalDistribution calculateHorizontalDistribution(List<Rectangle> rects) {
+        List<Integer> lefts = rects.stream().map(r -> r.x).sorted().toList();
+        List<Integer> rights = rects.stream().map(r -> r.x + r.width).sorted().toList();
+
+        return new HorizontalDistribution(
+                calculateBound(lefts, true), calculateBound(lefts, false),
+                calculateBound(rights, true), calculateBound(rights, false)
+        );
+    }
+
+    /**
+     *  사분위수(IQR)를 활용하여 상/하단 통계적 임계 경계값 계산
+     */
+    private double calculateBound(List<Integer> values, boolean isLower) {
+        int q1 = values.get(values.size() / 4);
+        int q3 = values.get(values.size() * 3 / 4);
+        double iqr = q3 - q1;
+        return isLower ? q1 - AppConstants.Policy.IQR_FACTOR * iqr : q3 + AppConstants.Policy.IQR_FACTOR * iqr;
+    }
+
+    /** 
+     * 특정 사각형이 본문 텍스트의 수평 정렬 범위(왼쪽/오른쪽) 내에 있는지 확인
+     */
+    private boolean isAlignedWithMainText(Rectangle target, HorizontalDistribution dist) {
+        boolean leftAligned = target.x >= dist.lowerL() && target.x <= dist.upperL();
+        boolean rightAligned = (target.x + target.width) >= dist.lowerR() && (target.x + target.width) <= dist.upperR();
+        return leftAligned || rightAligned;
+    }
+
+    /** 
+     * 두 사각형이 수직적으로 매우 인접하여 같은 문장/문단의 일부인지 판단
+     */
+    private boolean isVerticallyAdjacent(Rectangle prev, Rectangle curr) {
+        return (curr.y - (prev.y + prev.height)) <= prev.height * AppConstants.Policy.ADJACENCY_MULTIPLIER;
+    }
+
+    /**
+     * 수직으로 인접하고 수평으로 겹치는 동일 타입의 레이아웃 영역들을 하나로 병합
+     */
+    private List<LayoutService.LayoutRegion> mergeNearbyRegions(List<LayoutService.LayoutRegion> regions) {
+        if (regions.size() < 2) {
+            return regions;
+        }
+
+        // Y축 상단 좌표 기준으로 정렬
+        List<LayoutService.LayoutRegion> sortedRegions = regions.stream()
+                .sorted(Comparator.comparingInt(r -> r.rect().y))
+                .toList();
+
+        List<LayoutService.LayoutRegion> merged = new ArrayList<>();
+        LayoutService.LayoutRegion current = sortedRegions.get(0);
+
+        for (int i = 1; i < sortedRegions.size(); i++) {
+            LayoutService.LayoutRegion next = sortedRegions.get(i);
+            
+            // 동일 타입이고 수직 간격이 좁으며 수평적으로 겹치는 경우 병합
+            if (current.type().equals(next.type()) && isVerticallyClose(current.rect(), next.rect())) {
+                current = new LayoutService.LayoutRegion(
+                        current.type(), 
+                        current.rect().union(next.rect()), 
+                        Math.max(current.score(), next.score())
+                );
+            } else {
+                merged.add(current);
+                current = next;
+            }
+        }
+        merged.add(current);
+        return merged;
+    }
+
+    /** 
+     * 두 레이아웃 영역이 병합 가능한 수준으로 수직 인접 및 수평 중첩되는지 확인
+     */
+    private boolean isVerticallyClose(Rectangle r1, Rectangle r2) {
+        int gap = r2.y - (r1.y + r1.height);
+        int threshold = (int) (r1.height * AppConstants.Policy.ADJACENCY_MULTIPLIER);
+        boolean xOverlaps = Math.max(r1.x, r2.x) < Math.min(r1.x + r1.width, r2.x + r2.width);
+        
+        return gap >= AppConstants.Policy.VERTICAL_GAP_TOLERANCE && gap <= threshold && xOverlaps;
     }
 }

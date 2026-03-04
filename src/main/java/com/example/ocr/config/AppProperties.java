@@ -119,8 +119,12 @@ public record AppProperties(
             float layoutIouThreshold,
 
             /** 레이아웃 보정 시 유효한 텍스트로 인정할 최소 글자 수 */
-            @DefaultValue("2") @Min(1)
+            @DefaultValue("1") @Min(1)
             int minTextLength,
+
+            /** 텍스트 블록의 최소 평균 인식 신뢰도 (0.0 ~ 1.0) */
+            @DefaultValue("0.6") @Min(0) @Max(1)
+            float minCharScore,
 
             /** 표(Table) 영역 보정 시 추가할 상하좌우 여백 (픽셀) */
             @DefaultValue("10") @Min(0)
